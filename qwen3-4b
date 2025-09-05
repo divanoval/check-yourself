@@ -5,7 +5,7 @@ import os
 import sys
 
 
-model_name = "Qwen/Qwen3-14B"
+model_name = "Qwen/Qwen3-4B"
 
 # ensure model/tokenizer cache is on the pod (e.g., Runpod volume)
 preferred_cache_dirs = [
