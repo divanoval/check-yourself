@@ -3,13 +3,14 @@ from transformers import StoppingCriteriaList
 import csv
 import datetime
 import os
+import math
 
 
 # ===== User inputs =====
-PROMPT = "Paste your prompt here"
-INTENDED_ANSWER = "Paste the intended exact answer here"
-NUM_RUNS = 100
-MAX_NEW_TOKENS = 1024
+PROMPT = "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$"
+INTENDED_ANSWER = "88572"
+NUM_RUNS = 1
+MAX_NEW_TOKENS = 8192
 DO_SAMPLE = False  # set True for stochastic sampling
 TEMPERATURE = 0.7
 TOP_P = 0.95
@@ -39,7 +40,7 @@ def load_model_and_tokenizer():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, cache_dir=cache_dir)
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
-        torch_dtype="auto",
+        dtype="auto",
         device_map="auto",
         cache_dir=cache_dir,
         low_cpu_mem_usage=True,
@@ -86,6 +87,20 @@ def split_thinking_output(tokenizer, output_ids):
     return thinking, content
 
 
+def split_injected_and_remainder(thinking: str, injected: str):
+    if not injected:
+        return "", thinking
+    # Remove the injected prefix if present at the start (after optional leading whitespace)
+    leading_stripped = thinking.lstrip()
+    leading_ws_len = len(thinking) - len(leading_stripped)
+    if leading_stripped.startswith(injected):
+        remainder = leading_stripped[len(injected):]
+        # If we stripped leading whitespace, keep the exact whitespace removed at the front
+        return injected, remainder.lstrip()
+    # If not a clean prefix, still return both for transparency
+    return injected, thinking
+
+
 def ensure_output_dir():
     out_dir = os.path.join(os.path.dirname(__file__), "output tables")
     os.makedirs(out_dir, exist_ok=True)
@@ -98,6 +113,18 @@ def timestamped_csv_path():
     return os.path.join(out_dir, f"run_{ts}.csv")
 
 
+def _print_progress(current: int, total: int, width: int = 40):
+    current = max(0, min(current, total))
+    if total <= 0:
+        bar = "#" * width
+        suffix = "0/0"
+    else:
+        filled = int(math.floor(width * (current / total)))
+        bar = "#" * filled + "-" * (width - filled)
+        suffix = f"{current}/{total}"
+    print(f"\rProgress: [{bar}] {suffix}", end="", flush=True)
+
+
 def main():
     tokenizer, model = load_model_and_tokenizer()
     csv_path = timestamped_csv_path()
@@ -105,14 +132,15 @@ def main():
     rows = []
     matches = 0
 
-    for _ in range(NUM_RUNS):
-        model_inputs = build_inputs(tokenizer, PROMPT).to(model.device)
+    # Stop at <|im_end|> to terminate the assistant turn cleanly
+    try:
+        im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
+    except Exception:
+        im_end_id = getattr(tokenizer, "eos_token_id", None)
 
-        # Stop at <|im_end|> to terminate the assistant turn cleanly
-        try:
-            im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
-        except Exception:
-            im_end_id = getattr(tokenizer, "eos_token_id", None)
+    _print_progress(0, NUM_RUNS)
+    for i in range(NUM_RUNS):
+        model_inputs = build_inputs(tokenizer, PROMPT).to(model.device)
 
         generated_ids = model.generate(
             **model_inputs,
@@ -127,18 +155,41 @@ def main():
 
         output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
         thinking, content = split_thinking_output(tokenizer, output_ids)
-        rows.append({"prompt": PROMPT, "thinking": thinking, "output": content})
+        injected_part, remainder_thinking = split_injected_and_remainder(thinking, INJECTED_THINKING)
+        include_flag = 1 if INTENDED_ANSWER in content else 0
 
-        if content == INTENDED_ANSWER:  # strict equality
+        rows.append({
+            "model_name": MODEL_NAME,
+            "prompt": PROMPT,
+            "intended_answer": INTENDED_ANSWER,
+            "includes_answer": include_flag,
+            "injected_thinking": INJECTED_THINKING,
+            "remainder_thinking": remainder_thinking,
+        })
+
+        if include_flag:
             matches += 1
+
+        _print_progress(i + 1, NUM_RUNS)
 
     # write CSV
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["prompt", "thinking", "output"])
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "model_name",
+                "prompt",
+                "intended_answer",
+                "includes_answer",
+                "injected_thinking",
+                "remainder_thinking",
+            ],
+        )
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"Exact matches: {matches}/{NUM_RUNS}")
+    print()  # newline after progress bar
+    print(f"Contains matches: {matches}/{NUM_RUNS}")
     print(f"Saved rows to: {csv_path}")
 
 
