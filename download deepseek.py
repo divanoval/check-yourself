@@ -3,7 +3,7 @@ from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer
 
 
-model_name = "Qwen/Qwen3-14B"
+model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
 
 # ensure model/tokenizer cache is on the pod (e.g., Runpod volume)
 preferred_cache_dirs = [

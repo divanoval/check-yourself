@@ -1,11 +1,12 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.generation.streamers import TextStreamer
 from transformers import StoppingCriteria, StoppingCriteriaList
+import re
 import os
 import sys
 
 
-model_name = "Qwen/Qwen3-14B"
+model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
 THINK_END_ID = 151668
 
 # ensure model/tokenizer cache is on the pod (e.g., Runpod volume)
@@ -43,27 +44,6 @@ def load_model_and_tokenizer():
     return tokenizer, model
 
 
-def _eos_without_think(model):
-    eos = model.generation_config.eos_token_id
-    think_end_id = THINK_END_ID
-    if eos is None:
-        return None
-    if isinstance(eos, (list, tuple, set)):
-        filtered = [e for e in eos if e != think_end_id]
-        return filtered if filtered else None
-    return None if eos == think_end_id else eos
-
-
-def _endoftext_id(tokenizer):
-    try:
-        tid = tokenizer.convert_tokens_to_ids("<|endoftext|>")
-        if isinstance(tid, int) and tid >= 0:
-            return tid
-    except Exception:
-        pass
-    return getattr(tokenizer, "eos_token_id", None)
-
-
 def _im_end_id(tokenizer):
     try:
         tid = tokenizer.convert_tokens_to_ids("<|im_end|>")
@@ -84,17 +64,27 @@ class StopAtImEndAfterThinkEnd(StoppingCriteria):
         self.seen_think_end = False
 
     def __call__(self, input_ids, scores, **kwargs):
-        # input_ids shape: (batch, seq_len)
         seq = input_ids[0].tolist()
         if not self.seen_think_end and self.think_end_id in seq:
             self.seen_think_end = True
-        # Only stop at im_end if we've already seen think_end
         if self.seen_think_end and len(seq) > 0 and seq[-1] == self.im_end_id:
             return True
         return False
 
 
-def run_inference(tokenizer, model, prompt: str, max_new_tokens: int = 8192, enable_thinking: bool = True, injected_thinking: str = None):
+class StopOnBoxed(StoppingCriteria):
+    """Stop when a pattern boxed{...} appears in the generated text."""
+
+    def __init__(self, tokenizer):
+        super().__init__()
+        self.tokenizer = tokenizer
+
+    def __call__(self, input_ids, scores, **kwargs):
+        text = self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
+        return re.search(r"boxed\{[^}]+\}", text) is not None
+
+
+def run_inference(tokenizer, model, prompt: str, max_new_tokens: int = 2**16, enable_thinking: bool = True, injected_thinking: str = None):
     messages = [
         {"role": "user", "content": prompt}
     ]
@@ -113,12 +103,13 @@ def run_inference(tokenizer, model, prompt: str, max_new_tokens: int = 8192, ena
 
     eot_id = _im_end_id(tokenizer)
     stopping = StopAtImEndAfterThinkEnd(eot_id, THINK_END_ID)
+    stop_boxed = StopOnBoxed(tokenizer)
     generated_ids = model.generate(
         **model_inputs,
         max_new_tokens=max_new_tokens,
         eos_token_id=None,
         forced_eos_token_id=None,
-        stopping_criteria=StoppingCriteriaList([stopping])
+        stopping_criteria=StoppingCriteriaList([stop_boxed, stopping])
     )
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
 
@@ -166,7 +157,7 @@ class ThinkingColorStreamer(TextStreamer):
             print("", end="\n", flush=True)
 
 
-def run_inference_streaming(tokenizer, model, prompt: str, max_new_tokens: int = 8192, enable_thinking: bool = True, injected_thinking: str = None):
+def run_inference_streaming(tokenizer, model, prompt: str, max_new_tokens: int = 2**16, enable_thinking: bool = True, injected_thinking: str = None):
     messages = [
         {"role": "user", "content": prompt}
     ]
@@ -187,14 +178,34 @@ def run_inference_streaming(tokenizer, model, prompt: str, max_new_tokens: int =
     print("thinking content: ", end="", flush=True)
     eot_id = _im_end_id(tokenizer)
     stopping = StopAtImEndAfterThinkEnd(eot_id, THINK_END_ID)
+    stop_boxed = StopOnBoxed(tokenizer)
     _ = model.generate(
         **model_inputs,
         max_new_tokens=max_new_tokens,
         streamer=streamer,
         eos_token_id=None,
         forced_eos_token_id=None,
-        stopping_criteria=StoppingCriteriaList([stopping])
+        stopping_criteria=StoppingCriteriaList([stop_boxed, stopping])
     )
+
+
+def read_multiline_input(invite: str, end_marker: str = "<<<END>>>"):
+    print(f"{invite} — paste multiple lines, end with {end_marker}. Press Enter to skip.", flush=True)
+    lines = []
+    first = True
+    while True:
+        try:
+            line = input()
+        except EOFError:
+            break
+        if first and line.strip() == "":
+            return None
+        first = False
+        if line.strip() == end_marker:
+            break
+        lines.append(line)
+    text = "\n".join(lines).strip()
+    return text if text else None
 
 
 if __name__ == "__main__":
@@ -202,7 +213,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         prompt = " ".join(sys.argv[1:])
-        run_inference_streaming(tokenizer, model, prompt, max_new_tokens=8192, enable_thinking=True)
+        run_inference_streaming(tokenizer, model, prompt, max_new_tokens=2**16, enable_thinking=True)
         sys.exit(0)
 
     print("Interactive mode. Type 'exit' or press Ctrl-D to quit.")
@@ -217,9 +228,9 @@ if __name__ == "__main__":
             if prompt.lower() in {"exit", "quit", "q"}:
                 break
 
-            injected = input("(optional) injected thinking: ").strip()
-            injected = injected if injected else None
+            injected = read_multiline_input("(optional) injected thinking")
 
-            run_inference_streaming(tokenizer, model, prompt, max_new_tokens=8192, enable_thinking=True, injected_thinking=injected)
+            run_inference_streaming(tokenizer, model, prompt, max_new_tokens=2**16, enable_thinking=True, injected_thinking=injected)
     finally:
         pass
+
