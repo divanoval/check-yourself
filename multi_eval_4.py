@@ -100,6 +100,13 @@ So replacing the innermost part, the expression becomes:
 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(4)))))))))
 Now, let's compute the next layer. It's 1 + 3(4). So first, 3 times 4 is 12, then 1 + 12 is 13."""
 
+R_BIT_3 = """Okay, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3))))))))) 
+Wow, that's a lot of nested parentheses. It seems like each layer is another set of 1 + 3 multiplied by something. Maybe I can simplify it step by step, starting from the innermost parentheses and working my way out. Let me write it down as I go.
+Starting from the inside:
+The innermost part is 1 + 3. That's easy, 1 + 3 is 4.
+So replacing the innermost part, the expression becomes:
+3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(4)))))))))"""
+
 R_BIT_4 = """Okay, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3))))))))) 
 Wow, that's a lot of nested parentheses. It seems like each layer is another set of 1 + 3 multiplied by something. Maybe I can simplify it step by step, starting from the innermost parentheses and working my way out. Let me write it down as I go.
 Starting from the inside:
@@ -147,89 +154,82 @@ R_BLUNT = "The answer is 88572."
 #     injection_d
 # )
 
-run_evaluation(
-    "wrong_bit-12_deepseek",
-    "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
-    "boxed{88572}",
-    "88572",
-    20,
-    W_BIT_12
-)
+# run_evaluation(
+#     "wrong_bit-3_deepseek",
+#     "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
+#     "boxed{88572}",
+#     "88572",
+#     20,
+#     W_BIT_3
+# )
 
-for injection_d in [1500, 2000, 3000]:
+for injection_d in [250, 500]:
     run_evaluation(
-    "wrong_full_deepseek_depth_" + str(injection_d),
+    "right_blunt_deepseek_depth_" + str(injection_d),
     "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
     "boxed{88572}",
     "88572",
     20,
-    W_FULL,
+    R_BLUNT,
     injection_d
 )
 
 run_evaluation(
-    "right_blunt_deepseek",
+    "right_bit-3_deepseek",
     "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
     "boxed{88572}",
     "88572",
     20,
-    R_BLUNT
+    R_BIT_3
 )
+
+# run_evaluation(
+#     "right_blunt_deepseek",
+#     "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
+#     "boxed{88572}",
+#     "88572",
+#     20,
+#     R_BLUNT
+# )
+
+# for injection_d in [1500, 2000]:
+#     run_evaluation(
+#     "wrong_bit_deepseek_depth_" + str(injection_d),
+#     "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
+#     "boxed{88572}",
+#     "88572",
+#     20,
+#     W_BIT,
+#     injection_d
+# )
+
+# run_evaluation(
+#     "right_bit_deepseek",
+#     "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
+#     "boxed{88572}",
+#     "88572",
+#     20,
+#     R_BIT
+# )
+
+# run_evaluation(
+#     "right_full_deepseek",
+#     "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
+#     "boxed{88572}",
+#     "88572",
+#     20,
+#     R_FULL
+# )
 
 run_evaluation(
-    "right_full_deepseek",
+    "no_prefix_deepseek",
     "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
     "boxed{88572}",
     "88572",
     20,
-    R_FULL
+    ""
 )
 
-run_evaluation(
-    "right_bit_deepseek",
-    "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
-    "boxed{88572}",
-    "88572",
-    20,
-    R_BIT
-)
 
-for injection_d in [250, 500, 750, 1000]:
-    run_evaluation(
-    "wrong_bit-1_deepseek_depth_" + str(injection_d),
-    "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
-    "boxed{88572}",
-    "88572",
-    20,
-    W_BIT_1,
-    injection_d
-)
 
-run_evaluation(
-    "right_bit-4_deepseek",
-    "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
-    "boxed{88572}",
-    "88572",
-    20,
-    R_BIT_4
-)
 
-for injection_d in [250, 500, 750, 1000]:
-    run_evaluation(
-    "wrong_blunt_deepseek_depth_" + str(injection_d),
-    "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
-    "boxed{88572}",
-    "88572",
-    20,
-    W_BLUNT,
-    injection_d
-)
-
-run_evaluation(
-    "wrong_bit-3_deepseek",
-    "Compute $3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3(1+3)))))))))$",
-    "boxed{88572}",
-    "88572",
-    20,
-    W_BIT_3
-)

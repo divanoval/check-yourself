@@ -17,7 +17,7 @@ F_WRONG_ANSWER = "boxed{29523}"
 INTENDED_ANSWER = "88572"
 WRONG_ANSWER = "36084"
 NUM_RUNS = 3
-MAX_NEW_TOKENS = 2**16
+MAX_NEW_TOKENS = 2**14
 DO_SAMPLE = True  # set True for stochastic sampling
 TEMPERATURE = 0.6
 TOP_P = 0.95
@@ -120,7 +120,13 @@ def load_model_and_tokenizer():
     return tokenizer, model
 
 
-def build_inputs(tokenizer, prompt: str, injected_thinking: str):
+def _normalize_prefix(prefix: str) -> str:
+    if not prefix:
+        return ""
+    return prefix.rstrip("\n") + "\n"
+
+
+def build_inputs(tokenizer, prompt: str, injected_prefix: str, injected_thinking: str):
     messages = [{"role": "user", "content": prompt}]
     text = tokenizer.apply_chat_template(
         messages,
@@ -128,11 +134,14 @@ def build_inputs(tokenizer, prompt: str, injected_thinking: str):
         add_generation_prompt=True,
         enable_thinking=ENABLE_THINKING,
     )
-    if injected_thinking:
+    # Inject prefix (with exactly one trailing newline), and optionally injected_thinking immediately after it
+    insert_after_think = _normalize_prefix(injected_prefix) + (injected_thinking + " " if injected_thinking else "")
+    if insert_after_think:
         if "<think>" in text:
-            text = text.replace("<think>", "<think>" + injected_thinking + " ", 1)
+            text = text.replace("<think>", "<think>" + insert_after_think, 1)
         else:
-            text = text + "<think>" + injected_thinking + " "
+            # Model did not emit <think>; pre-emit <think> + prefix (and thinking if provided)
+            text = text + "<think>" + insert_after_think
     return tokenizer([text], return_tensors="pt")
 
 
@@ -214,7 +223,8 @@ def run_evaluation(file_name: str,
                    intended_answer: str,
                    num_runs: int,
                    injected_thinking: str,
-                   injection_depth: int = 0):
+                   injection_depth: int = 0,
+                   injected_prefix: str | None = None):
     tokenizer, model = load_model_and_tokenizer()
     csv_path = timestamped_csv_path(file_name)
 
@@ -245,7 +255,7 @@ def run_evaluation(file_name: str,
 
         if injection_depth and injection_depth > 0:
             # Phase 1: generate up to injection_depth with StopOnBoxed enabled and no injected thinking
-            model_inputs_phase1 = build_inputs(tokenizer, prompt, "").to(model.device)
+            model_inputs_phase1 = build_inputs(tokenizer, prompt, injected_prefix or "", "").to(model.device)
             generated_ids_phase1 = model.generate(
                 **model_inputs_phase1,
                 max_new_tokens=injection_depth,
@@ -288,7 +298,7 @@ def run_evaluation(file_name: str,
                 output_ids = phase1_out_ids + phase2_out_ids
         else:
             # Single-pass generation as before
-            model_inputs = build_inputs(tokenizer, prompt, injected_thinking).to(model.device)
+            model_inputs = build_inputs(tokenizer, prompt, injected_prefix or "", injected_thinking).to(model.device)
             generated_ids = model.generate(
                 **model_inputs,
                 max_new_tokens=MAX_NEW_TOKENS,
@@ -370,6 +380,8 @@ def run_evaluation(file_name: str,
         f.write(f"Model name: {MODEL_NAME}\n")
         f.write(f"Prompt: {prompt}\n")
         f.write(f"Intended answer: {intended_answer}\n\n")
+        if injected_prefix:
+            f.write(f"Injected prefix: \n {injected_prefix}\n\n")
         f.write(f"Injected thinking: \n {injected_thinking}\n\n")
         f.write(f"Average token_count: {avg_token_count:.2f}\n")
         f.write(f"Correct answers: {matches}/{num_runs}\n")
@@ -404,6 +416,7 @@ if __name__ == "__main__":
         INTENDED_ANSWER,
         NUM_RUNS,
         INJECTED_THINKING,
+        injected_prefix=None,
     )
 
 
