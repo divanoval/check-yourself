@@ -7,6 +7,7 @@ import datetime
 import os
 import math
 import torch
+from steering_vector_colab import load_model_and_vectors, generate_with_steering_from_inputs
 
 
 # ===== User inputs =====
@@ -418,5 +419,162 @@ if __name__ == "__main__":
         INJECTED_THINKING,
         injected_prefix=None,
     )
+
+
+def run_evaluation_with_steering(file_name: str,
+                                 prompt: str,
+                                 f_intended_answer: str,
+                                 intended_answer: str,
+                                 num_runs: int,
+                                 injected_prefix: str | None,
+                                 steering_label: str | None,
+                                 steer_positive: bool = True,
+                                 coefficient: float = 1.0):
+    # Load nnsight model/tokenizer and steering vectors
+    steer_model, steer_tokenizer, feature_vectors = load_model_and_vectors()
+    csv_path = timestamped_csv_path(file_name)
+
+    rows = []
+    matches = 0
+    thinking_intended_matches = 0
+    sum_token_count = 0
+    produced_answers = []
+    _seen_answers = {}
+
+    # Build initial input once (prompt + injected_prefix at <think>)
+    messages = [{"role": "user", "content": prompt}]
+    text = steer_tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=ENABLE_THINKING,
+    )
+    insert_after_think = _normalize_prefix(injected_prefix or "")
+    if insert_after_think:
+        if "<think>" in text:
+            text = text.replace("<think>", "<think>" + insert_after_think, 1)
+        else:
+            text = text + "<think>" + insert_after_think
+
+    base_inputs = steer_tokenizer([text], return_tensors="pt")
+
+    # Stop by post-parsing; nnsight does not support transformers StoppingCriteria directly
+    _print_progress(0, num_runs)
+    for i in range(num_runs):
+        input_ids = base_inputs.input_ids.to("cuda")
+        attention_mask = (input_ids != steer_tokenizer.pad_token_id).long()
+
+        # Generate steered output (single pass)
+        response_text = generate_with_steering_from_inputs(
+            steer_model,
+            steer_tokenizer,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=MAX_NEW_TOKENS,
+            steering_label=steering_label,
+            feature_vectors=feature_vectors,
+            steer_positive=steer_positive,
+            coefficient=coefficient,
+        )
+
+        # Decode section after the prompt by subtracting the prompt string prefix
+        # We rely on tokenizer to reconstruct tags; response_text includes generated text.
+        full_raw = response_text
+
+        # Extract thinking/content like split_thinking_output expects token IDs; reuse text splitter
+        # Using a textual variant: emulate split_thinking_output by searching tags in full_raw
+        START_CANDIDATES = ["<think>", "<|assistant_think|>", "<|begin_think|>"]
+        END_CANDIDATES = ["</think>", "<|end_think|>"]
+        start = -1
+        start_tag = None
+        for t in START_CANDIDATES:
+            pos = full_raw.find(t)
+            if pos != -1:
+                start, start_tag = pos, t
+                break
+        end = -1
+        end_tag = None
+        if start != -1:
+            for t in END_CANDIDATES:
+                pos = full_raw.find(t, start + len(start_tag))
+                if pos != -1:
+                    end, end_tag = pos, t
+                    break
+        if start != -1 and end != -1 and end > start:
+            thinking = full_raw[start + len(start_tag): end].strip()
+            content = full_raw[end + len(end_tag):].strip()
+        else:
+            thinking = ""
+            content = full_raw
+
+        injected_part, remainder_thinking = split_injected_and_remainder(thinking, (injected_prefix or "").rstrip("\n"))
+
+        include_flag = 1 if (f_intended_answer in content or f_intended_answer in remainder_thinking) else 0
+        include_intended_in_thinking = remainder_thinking.count(intended_answer) + content.count(intended_answer)
+
+        # Extract last boxed{...}
+        combined_output_for_search = f"{remainder_thinking}\n{content}"
+        boxed_matches = re.findall(r"boxed\{(.*?)\}", combined_output_for_search, flags=re.DOTALL)
+        model_answer = boxed_matches[-1] if boxed_matches else ""
+        if model_answer:
+            _seen_answers[model_answer] = _seen_answers.get(model_answer, 0) + 1
+
+        content_one_line = re.sub(r"[\r\n]+", " <nEwLiNe>", content).strip()
+        remainder_one_line = re.sub(r"[\r\n]+", " <nEwLiNe>", remainder_thinking).strip()
+
+        output_multiline = "\n" + (remainder_one_line + " " + content_one_line)
+        rows.append({
+            "index": i + 1,
+            "model_answer": model_answer,
+            "correct": include_flag,
+            "includes_intended": include_intended_in_thinking,
+            "token_count": len(steer_tokenizer.encode(content, add_special_tokens=False)),
+            "output": output_multiline,
+        })
+
+        if include_flag:
+            matches += 1
+        if include_intended_in_thinking:
+            thinking_intended_matches += 1
+
+        sum_token_count += rows[-1]["token_count"]
+        _print_progress(i + 1, num_runs)
+
+    produced_answers = [f"{a} ({c})" for a, c in _seen_answers.items() if a.strip()]
+
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        avg_token_count = (sum_token_count / num_runs) if num_runs else 0
+        f.write(f"Answers produced: {', '.join(produced_answers)}\n")
+        f.write(f"Model name: {MODEL_NAME}\n")
+        f.write(f"Prompt: {prompt}\n")
+        f.write(f"Intended answer: {intended_answer}\n\n")
+        if injected_prefix:
+            f.write(f"Injected prefix: \n {injected_prefix}\n\n")
+        f.write(f"Steering label: {steering_label}\n")
+        f.write(f"Steer positive: {steer_positive}\n")
+        f.write(f"Coefficient: {coefficient}\n")
+        f.write(f"Average token_count: {avg_token_count:.2f}\n")
+        f.write(f"Correct answers: {matches}/{num_runs}\n")
+        f.write(f"Output contains correct answer: {thinking_intended_matches}/{num_runs}\n\n")
+
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "index",
+                "model_answer",
+                "correct",
+                "includes_intended",
+                "token_count",
+                "output"
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print()
+    print(f"Correct answers: {matches}/{num_runs}")
+    print(f"Output contains correct answer: {thinking_intended_matches}/{num_runs}")
+    print(f"Answers produced: {', '.join(produced_answers)}")
+    print(f"Saved rows to: {csv_path}")
 
 
