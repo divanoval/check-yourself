@@ -39,7 +39,7 @@ def _configure_ram_caches():
 _configure_ram_caches()
 
 MODEL_NAME = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
-VECTOR_PATH = "/workspace/check-yourself/main: test deepseek/pretrained steering vectors/mean_vectors_deepseek-r1-distill-qwen-14b.pt"
+VECTOR_PATH = "/workspace/well-begun-half-done/main: test deepseek/pretrained steering vectors/mean_vectors_deepseek-r1-distill-qwen-14b.pt"
 
 STEERING_CONFIG = {
     "backtracking": {
