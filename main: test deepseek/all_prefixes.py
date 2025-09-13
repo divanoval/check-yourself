@@ -1,5 +1,6 @@
 ## Wrong prefix, clipped at different depths ##
 
+# length: 679 tokens #
 W_S28 = """Alright, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3)))))))))\). Wow, that's a lot of nested parentheses! It looks like a recursive expression, where each layer is 3 times (1 plus something). Let me try to break it down step by step.
 First, maybe I should start from the innermost parentheses and work my way out. That seems like a logical approach because each part of the expression depends on the result of the inner one. So, let's identify the innermost part.
 Looking at the expression, the innermost parentheses is the last one: (1 + 3). Let me compute that first.
@@ -19,6 +20,7 @@ Layer 7: 3*(1 + Layer 6) = 3*(1 + 1335) = 3*1336 = 4008.
 Layer 8: 3*(1 + Layer 7) = 3*(1 + 4008) = 3*4009 = 12027.
 Layer 9: 3*(1 + Layer 8) = 3*(1 + 12027) = 3*12028 = 36084."""
 
+# length: 337 tokens #
 W_S16 = """Alright, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3)))))))))\). Wow, that's a lot of nested parentheses! It looks like a recursive expression, where each layer is 3 times (1 plus something). Let me try to break it down step by step.
 First, maybe I should start from the innermost parentheses and work my way out. That seems like a logical approach because each part of the expression depends on the result of the inner one. So, let's identify the innermost part.
 Looking at the expression, the innermost parentheses is the last one: (1 + 3). Let me compute that first.
@@ -28,6 +30,7 @@ Wait, that's a bit confusing. Maybe I should label each layer as I go. Let me nu
 Layer 1: (1 + 3) = 4.
 Then Layer 2: 3(1 + Layer 1) = 3*(1 + 4) = 3*5 = 15."""
 
+# length: 304 tokens #
 W_S15 = """Alright, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3)))))))))\). Wow, that's a lot of nested parentheses! It looks like a recursive expression, where each layer is 3 times (1 plus something). Let me try to break it down step by step.
 First, maybe I should start from the innermost parentheses and work my way out. That seems like a logical approach because each part of the expression depends on the result of the inner one. So, let's identify the innermost part.
 Looking at the expression, the innermost parentheses is the last one: (1 + 3). Let me compute that first.
@@ -36,6 +39,7 @@ Okay, so replacing that innermost part, the expression becomes: 3(1 + 3(1 + 3(1 
 Wait, that's a bit confusing. Maybe I should label each layer as I go. Let me number them from the innermost as Layer 1 to the outermost as Layer 9.
 Layer 1: (1 + 3) = 4."""
 
+# length: 269 tokens #
 W_S13 = """Alright, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3)))))))))\). Wow, that's a lot of nested parentheses! It looks like a recursive expression, where each layer is 3 times (1 plus something). Let me try to break it down step by step.
 First, maybe I should start from the innermost parentheses and work my way out. That seems like a logical approach because each part of the expression depends on the result of the inner one. So, let's identify the innermost part.
 Looking at the expression, the innermost parentheses is the last one: (1 + 3). Let me compute that first.
@@ -43,15 +47,18 @@ Looking at the expression, the innermost parentheses is the last one: (1 + 3). L
 Okay, so replacing that innermost part, the expression becomes: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(4)))))))))\).
 Wait, that's a bit confusing. Maybe I should label each layer as I go."""
 
+# length: 251 token #
 W_S11 = """Alright, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3)))))))))\). Wow, that's a lot of nested parentheses! It looks like a recursive expression, where each layer is 3 times (1 plus something). Let me try to break it down step by step.
 First, maybe I should start from the innermost parentheses and work my way out. That seems like a logical approach because each part of the expression depends on the result of the inner one. So, let's identify the innermost part.
 Looking at the expression, the innermost parentheses is the last one: (1 + 3). Let me compute that first.
 1 + 3 = 4.
 Okay, so replacing that innermost part, the expression becomes: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(4)))))))))\)."""
 
+# length: 150 tokens #
 W_S7 = """Alright, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3)))))))))\). Wow, that's a lot of nested parentheses! It looks like a recursive expression, where each layer is 3 times (1 plus something). Let me try to break it down step by step.
 First, maybe I should start from the innermost parentheses and work my way out. That seems like a logical approach because each part of the expression depends on the result of the inner one. So, let's identify the innermost part."""
 
+# length: 91 token #
 W_S3 = """Alright, so I have this expression to compute: 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3(1 + 3)))))))))\). Wow, that's a lot of nested parentheses! It looks like a recursive expression, where each layer is 3 times (1 plus something)."""
 
 W_BLUNT = "The answer is 36084."
